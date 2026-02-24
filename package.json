@@ -1,0 +1,47 @@
+{
+  "name": "wabi-payments-sdk",
+  "version": "1.0.0",
+  "description": "Unofficial Node.js SDK for WABI Digital payment gateway integration",
+  "main": "src/wabi-client.js",
+  "scripts": {
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "example:basic": "node examples/basic-payment.js",
+    "example:complete": "node examples/complete-payment-flow.js",
+    "lint": "eslint src/ examples/",
+    "format": "prettier --write 'src/**/*.js' 'examples/**/*.js'"
+  },
+  "keywords": [
+    "wabi",
+    "payments",
+    "bolivia",
+    "dlocal",
+    "tigo",
+    "entel",
+    "payment-gateway",
+    "fintech",
+    "sdk"
+  ],
+  "author": "Community",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/wabi-payments-sdk.git"
+  },
+  "bugs": {
+    "url": "https://github.com/yourusername/wabi-payments-sdk/issues"
+  },
+  "homepage": "https://github.com/yourusername/wabi-payments-sdk#readme",
+  "dependencies": {
+    "axios": "^1.6.0"
+  },
+  "devDependencies": {
+    "eslint": "^8.50.0",
+    "jest": "^29.7.0",
+    "prettier": "^3.0.3"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}
